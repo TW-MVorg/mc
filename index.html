@@ -206,7 +206,7 @@
             msgArea.textContent = '正在連線到 Cloudflare API 獲取狀態';
             
             try {
-                // GET 請求
+                // GET 請求：使用相對路徑
                 const response = await fetch(STATUS_API_ENDPOINT); 
                 
                 if (!response.ok) {
@@ -257,7 +257,7 @@
             };
 
             try {
-                // POST 請求：發送到 Pages Functions，受 Zero Trust 保護
+                // POST 請求：使用相對路徑
                 const response = await fetch(STATUS_API_ENDPOINT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
