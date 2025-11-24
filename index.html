@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MC 伺服器狀態管理頁面</title>
+    <style>
+        /* CSS 樣式與您提供的完全相同 */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; color: #333; text-align: center; padding-top: 50px; }
+        .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+        h1 { color: #007bff; margin-bottom: 20px; }
+        .status-display { padding: 20px; border-radius: 8px; font-size: 1.8em; font-weight: bold; margin-bottom: 30px; }
+        .online { background-color: #d4edda; color: #155724; }
+        .maintenance { background-color: #fff3cd; color: #856404; }
+        .offline { background-color: #f8d7da; color: #721c24; }
+        .address { font-size: 1.2em; margin-bottom: 20px; }
+        .admin-button { padding: 10px 20px; font-size: 1em; cursor: pointer; background-color: #6c757d; color: white; border: none; border-radius: 5px; }
+        #admin-panel { margin-top: 30px; padding: 20px; border: 1px solid #ccc; border-radius: 5px; display: none; text-align: left; }
+        #admin-panel label { display: block; margin-top: 10px; font-weight: bold; }
+        #admin-panel select, #admin-panel input[type="text"] { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        #admin-panel button { margin-top: 15px; background-color: #28a745; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>⛏️ MC 伺服器狀態 ⛏️</h1>
+        
+        <div class="address">
+            伺服器地址：<strong>mc.mqi.qzz.io:19132</strong>
+        </div>
+
+        <div id="status-display-area" class="status-display maintenance">
+            載入中...
+        </div>
+
+        <button class="admin-button" onclick="promptAdminLogin()">管理員登入</button>
+        
+        <div id="admin-panel">
+            <h2>更新伺服器狀態</h2>
+            <label for="new-status">選擇新狀態：</label>
+            <select id="new-status">
+                <option value="online">🟢 伺服器在線</option>
+                <option value="maintenance">🟡 維護中</option>
+                <option value="offline">🔴 伺服器離線</option>
+            </select>
+            
+            <label for="new-message">狀態訊息 (選填，例如：預計 18:00 開機):</label>
+            <input type="text" id="new-message" placeholder="輸入訊息...">
+
+            <button class="admin-button" onclick="saveStatus()" style="background-color: #007bff;">儲存並更新狀態</button>
+        </div>
+    </div>
+
+    <script>
+        const STATUS_API_ENDPOINT = '/api/status';
+        
+        // --- 載入和顯示狀態 (從 KV 讀取) ---
+        async function loadStatus() {
+            const displayArea = document.getElementById('status-display-area');
+            displayArea.className = 'status-display maintenance';
+            displayArea.innerHTML = '正在從伺服器載入...';
+            
+            try {
+                const response = await fetch(STATUS_API_ENDPOINT); 
+                const statusData = await response.json(); 
+
+                const { status, message } = statusData;
+
+                displayArea.className = 'status-display'; 
+                displayArea.classList.add(status);
+                
+                let statusText = '';
+                if (status === 'online') {
+                    statusText = '🟢 伺服器在線';
+                } else if (status === 'maintenance') {
+                    statusText = '🟡 維護中';
+                } else if (status === 'offline') {
+                    statusText = '🔴 伺服器離線';
+                }
+
+                const finalMessage = message || '無最新訊息。';
+
+                displayArea.innerHTML = `${statusText} <br><small style="font-size: 0.5em; font-weight: normal;">${finalMessage}</small>`;
+
+                document.getElementById('new-status').value = status;
+                document.getElementById('new-message').value = message;
+
+            } catch (error) {
+                console.error('Failed to load status:', error);
+                displayArea.className = 'status-display offline';
+                displayArea.innerHTML = '🔴 錯誤 <br><small style="font-size: 0.5em; font-weight: normal;">無法連線到狀態 API，請檢查部署。</small>';
+            }
+        }
+
+        // --- 管理員操作 (Zero Trust) ---
+        function promptAdminLogin() {
+            document.getElementById('admin-panel').style.display = 'block';
+            alert("已進入管理模式。請注意：狀態更新的權限將由 Zero Trust 驗證。");
+        }
+
+        async function saveStatus() {
+            const newStatus = document.getElementById('new-status').value;
+            const rawMessage = document.getElementById('new-message').value.trim();
+            
+            let finalMessage;
+             if (!rawMessage) {
+                if (newStatus === 'online') {
+                    finalMessage = '歡迎連線！伺服器運行穩定。';
+                } else if (newStatus === 'offline') {
+                    finalMessage = '伺服器目前已關機或無法連線。';
+                } else if (newStatus === 'maintenance') {
+                    finalMessage = '伺服器正在進行臨時維護，很快會回來。';
+                } else {
+                    finalMessage = '狀態已更新，但無具體訊息。';
+                }
+            } else {
+                finalMessage = rawMessage;
+            }
+
+
+            const updatedData = {
+                status: newStatus,
+                message: finalMessage
+            };
+
+            try {
+                const response = await fetch(STATUS_API_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updatedData)
+                });
+
+                if (response.ok) {
+                    alert("✅ 狀態已成功更新至伺服器！");
+                    loadStatus();
+                    document.getElementById('admin-panel').style.display = 'none';
+                } else if (response.status === 401 || response.status === 403) {
+                    alert("❌ 權限錯誤：您沒有權限更新狀態。請通過 Zero Trust 登入您的管理員 Email。");
+                } else {
+                    alert(`❌ 更新失敗 (${response.status})。請檢查 Pages Function 日誌。`);
+                }
+
+            } catch (error) {
+                console.error('Update failed:', error);
+                alert("❌ 網路錯誤：無法連線到狀態 API。");
+            }
+        }
+
+        window.onload = loadStatus;
+    </script>
+
+</body>
+</html>
