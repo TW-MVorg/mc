@@ -3,48 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MC 伺服器狀態管理頁面</title>
-    <style>
-        /* 基本樣式 */
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; color: #333; text-align: center; padding-top: 50px; }
-        .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
-        h1 { color: #007bff; margin-bottom: 20px; }
-        .status-display { padding: 20px; border-radius: 8px; font-size: 1.8em; font-weight: bold; margin-bottom: 30px; }
-        
-        /* 十種新狀態的顏色定義 */
-        .online_normal { background-color: #d4edda; color: #155724; } /* 綠色 */
-        .online_lagging { background-color: #fff3cd; color: #856404; } /* 橙色 */
-        .maintenance_planned { background-color: #ffe599; color: #9c6c00; } /* 黃色 (排程維護) */
-        .maintenance_urgent { background-color: #f8d7da; color: #721c24; } /* 紅色 (緊急修復) */
-        .offline_graceful { background-color: #cce0ff; color: #004085; } /* 藍色 (正常關閉) */
-        .offline_crashed { background-color: #343a40; color: #ffffff; } /* 黑色 (意外崩潰) */
-        .startup_check { background-color: #ccacec; color: #4b0082; } /* 淺紫色 (啟動中) */
-        .startup_complete { background-color: #9933cc; color: #ffffff; } /* 深紫色 (準備完畢) */
-        .api_error { background-color: #888; color: #ffffff; } /* 深灰色 (API 錯誤) */
-        .unknown { background-color: #e9e9e9; color: #6c757d; } /* 淺灰色 (未知狀態) */
+    <title>MC 伺服器狀態中心 - Cloudflare Pages</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"> 
 
-        .address { font-size: 1.2em; margin-bottom: 20px; }
-        .admin-button { padding: 10px 20px; font-size: 1em; cursor: pointer; background-color: #6c757d; color: white; border: none; border-radius: 5px; }
-        #admin-panel { margin-top: 30px; padding: 20px; border: 1px solid #ccc; border-radius: 5px; display: none; text-align: left; }
-        #admin-panel label { display: block; margin-top: 10px; font-weight: bold; }
-        #admin-panel select, #admin-panel input[type="text"] { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        #admin-panel button { margin-top: 15px; background-color: #007bff; }
+    <style>
+        /* CSS 變數定義，方便顏色修改 */
+        :root {
+            --color-green: #28a745;
+            --color-orange: #ffc107;
+            --color-yellow: #ffeb3b;
+            --color-red: #dc3545;
+            --color-blue: #007bff;
+            --color-black: #343a40;
+            --color-purple-light: #9c27b0;
+            --color-purple-dark: #673ab7;
+            --color-gray-dark: #6c757d;
+            --color-gray-light: #f8f9fa;
+        }
+
+        /* 核心佈局 */
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #f4f4f4; 
+            color: var(--color-black); 
+            padding: 20px; 
+            text-align: center;
+        }
+        .container { 
+            max-width: 700px; 
+            margin: 0 auto; 
+            background: #ffffff; 
+            padding: 30px; 
+            border-radius: 12px; 
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15); 
+        }
+        h1 { 
+            color: var(--color-blue); 
+            margin-bottom: 25px;
+            font-size: 2em;
+        }
+
+        /* 狀態顯示卡片 */
+        #status-card {
+            border-radius: 10px;
+            padding: 30px 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .status-icon {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .status-text {
+            font-size: 2.2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .status-message {
+            font-size: 1em;
+            color: #666;
+            margin-top: 10px;
+        }
+        .address-info {
+            font-size: 1.1em;
+            color: var(--color-gray-dark);
+            margin-bottom: 25px;
+        }
+
+        /* 狀態顏色設定 */
+        .online_normal { background-color: #e6f7e9; color: var(--color-green); } 
+        .online_lagging { background-color: #fff9e6; color: var(--color-orange); } 
+        .maintenance_planned { background-color: #fffde7; color: #ccb500; } 
+        .maintenance_urgent { background-color: #fce7e7; color: var(--color-red); } 
+        .offline_graceful { background-color: #e6f0ff; color: var(--color-blue); } 
+        .offline_crashed { background-color: var(--color-black); color: #ffffff; } 
+        .startup_check { background-color: #f3e5f5; color: var(--color-purple-light); } 
+        .startup_complete { background-color: #ede7f6; color: var(--color-purple-dark); } 
+        .api_error, .unknown { background-color: var(--color-gray-light); color: var(--color-gray-dark); } 
+
+        /* 管理員介面 */
+        .admin-button { 
+            padding: 10px 25px; 
+            font-size: 1em; 
+            cursor: pointer; 
+            background-color: var(--color-gray-dark); 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            transition: background-color 0.3s;
+        }
+        .admin-button:hover {
+            background-color: #495057;
+        }
+        #admin-panel { 
+            margin-top: 30px; 
+            padding: 25px; 
+            border: 1px solid #ccc; 
+            border-radius: 8px; 
+            display: none; 
+            text-align: left; 
+            background-color: var(--color-gray-light);
+        }
+        #admin-panel label { display: block; margin-top: 15px; font-weight: bold; color: var(--color-black); }
+        #admin-panel select, #admin-panel input[type="text"] { 
+            width: 100%; 
+            padding: 10px; 
+            margin-top: 8px; 
+            border: 1px solid #ced4da; 
+            border-radius: 4px; 
+            box-sizing: border-box; 
+        }
+        #admin-panel button { 
+            margin-top: 20px; 
+            background-color: var(--color-blue); 
+        }
+        #admin-panel button:hover {
+             background-color: #0056b3;
+        }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1>⛏️ MC 伺服器狀態 ⛏️</h1>
+        <h1><i class="fas fa-server"></i> MC 伺服器狀態中心</h1>
         
-        <div class="address">
+        <div class="address-info">
             伺服器地址：<strong>mc.mqi.qzz.io:19132</strong>
         </div>
 
-        <div id="status-display-area" class="status-display unknown">
-            載入中...
+        <div id="status-card" class="unknown">
+            <div id="status-icon-area" class="status-icon"><i class="fas fa-spinner fa-spin"></i></div>
+            <div id="status-text-area" class="status-text">載入中...</div>
+            <div id="status-message-area" class="status-message">正在連線到 Cloudflare API 獲取狀態</div>
         </div>
 
-        <button class="admin-button" onclick="promptAdminLogin()">管理員登入</button>
+        <button class="admin-button" onclick="promptAdminLogin()">管理員登入與更新</button>
         
         <div id="admin-panel">
             <h2>更新伺服器狀態</h2>
@@ -60,7 +154,7 @@
                 <option value="startup_complete">🟣 準備完畢 (Ready)</option>
             </select>
             
-            <label for="new-message">狀態訊息 (選填):</label>
+            <label for="new-message">狀態訊息 (選填，對玩家顯示的詳細資訊):</label>
             <input type="text" id="new-message" placeholder="輸入訊息...">
 
             <button class="admin-button" onclick="saveStatus()">儲存並更新狀態</button>
@@ -68,69 +162,78 @@
     </div>
 
     <script>
-        // *** 關鍵修改：將 API 端點寫死為您的 Cloudflare Pages 域名 ***
-        // 這樣可以確保 GitHub Pages 也能正確讀取狀態
+        // *** 關鍵設置：硬性指向您的 Cloudflare Pages API 域名 ***
         const STATUS_API_ENDPOINT = 'https://mc-90f.pages.dev/api/status'; 
         
-        function getStatusText(status) {
+        // --- 狀態轉換與圖標 ---
+        function getStatusInfo(status) {
             switch(status) {
                 case 'online_normal':
-                    return '🟢 正常運行 (Stable)';
+                    return { text: '🟢 正常運行 (Stable)', icon: 'fas fa-check-circle', defaultMsg: '伺服器運行穩定，歡迎連線！' };
                 case 'online_lagging':
-                    return '🟠 運行緩慢 (Lagging)';
+                    return { text: '🟠 運行緩慢 (Lagging)', icon: 'fas fa-exclamation-triangle', defaultMsg: '伺服器運行緩慢，請等待管理員處理。' };
                 case 'maintenance_planned':
-                    return '🟡 排程維護中';
+                    return { text: '🟡 排程維護中', icon: 'fas fa-calendar-alt', defaultMsg: '正在進行排程維護，預計結束時間請參考下方訊息。' };
                 case 'maintenance_urgent':
-                    return '🔴 緊急修復中';
+                    return { text: '🔴 緊急修復中', icon: 'fas fa-shield-alt', defaultMsg: '緊急修復中，將在短時間內重啟。' };
                 case 'offline_graceful':
-                    return '🔵 正常關閉 (Sleep)';
+                    return { text: '🔵 正常關閉 (Sleep)', icon: 'fas fa-power-off', defaultMsg: '伺服器已由管理員正常關機。' };
                 case 'offline_crashed':
-                    return '⚫ 意外崩潰 (Crashed)';
+                    return { text: '⚫ 意外崩潰 (Crashed)', icon: 'fas fa-bug', defaultMsg: '伺服器意外崩潰，正在檢查中。' };
                 case 'startup_check':
-                    return '🟣 啟動中 (Checking)';
+                    return { text: '🟣 啟動中 (Checking)', icon: 'fas fa-cogs', defaultMsg: '伺服器進程已啟動，正在載入世界數據。' };
                 case 'startup_complete':
-                    return '🟣 準備完畢 (Ready)';
+                    return { text: '🟣 準備完畢 (Ready)', icon: 'fas fa-hourglass-end', defaultMsg: '伺服器啟動完成，管理員準備開放中。' };
                 case 'api_error':
-                    return '💔 API 連線失敗';
+                    return { text: '💔 API 連線失敗', icon: 'fas fa-unlink', defaultMsg: '無法連線到 Cloudflare API 獲取狀態。' };
                 case 'unknown':
                 default:
-                    return '❓ 狀態未知 (Unknown)';
+                    return { text: '❓ 狀態未知 (Unknown)', icon: 'fas fa-question-circle', defaultMsg: 'Pages Function 發生未知錯誤。' };
             }
         }
 
         // --- 載入和顯示狀態 (從 KV 讀取) ---
         async function loadStatus() {
-            const displayArea = document.getElementById('status-display-area');
-            displayArea.className = 'status-display unknown';
-            displayArea.innerHTML = '正在從伺服器載入...';
+            const card = document.getElementById('status-card');
+            const iconArea = document.getElementById('status-icon-area');
+            const textArea = document.getElementById('status-text-area');
+            const msgArea = document.getElementById('status-message-area');
+
+            // 設置初始載入狀態
+            card.className = 'unknown'; 
+            iconArea.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            textArea.textContent = '載入中...';
+            msgArea.textContent = '正在連線到 Cloudflare API 獲取狀態';
             
             try {
-                // 讀取請求發送到 mc-90f.pages.dev
+                // GET 請求：從 mc-90f.pages.dev 讀取狀態
                 const response = await fetch(STATUS_API_ENDPOINT); 
                 const statusData = await response.json(); 
 
                 const { status, message } = statusData;
+                const info = getStatusInfo(status);
 
-                displayArea.className = 'status-display'; 
-                displayArea.classList.add(status); 
-                
-                const statusText = getStatusText(status);
-                const finalMessage = message || '無最新訊息。';
+                // 更新 UI
+                card.className = status; 
+                iconArea.innerHTML = `<i class="${info.icon}"></i>`;
+                textArea.textContent = info.text;
+                msgArea.textContent = message || info.defaultMsg;
 
-                displayArea.innerHTML = `${statusText} <br><small style="font-size: 0.5em; font-weight: normal;">${finalMessage}</small>`;
-
+                // 在管理面板中載入當前值
                 document.getElementById('new-status').value = status;
                 document.getElementById('new-message').value = message;
 
             } catch (error) {
                 console.error('Failed to load status:', error);
-                // 讀取 API 失敗，設為 API 錯誤狀態
-                displayArea.className = 'status-display api_error';
-                displayArea.innerHTML = '💔 API 連線失敗 <br><small style="font-size: 0.5em; font-weight: normal;">無法連線到 Cloudflare API。</small>';
+                const errorInfo = getStatusInfo('api_error');
+                card.className = 'api_error';
+                iconArea.innerHTML = `<i class="${errorInfo.icon}"></i>`;
+                textArea.textContent = errorInfo.text;
+                msgArea.textContent = errorInfo.defaultMsg;
             }
         }
 
-        // --- 管理員操作 (Zero Trust) ---
+        // --- 管理員操作 ---
         function promptAdminLogin() {
             document.getElementById('admin-panel').style.display = 'block';
             alert("已進入管理模式。請注意：狀態更新的權限將由 Zero Trust 驗證。");
@@ -140,41 +243,8 @@
             const newStatus = document.getElementById('new-status').value;
             const rawMessage = document.getElementById('new-message').value.trim();
             
-            let finalMessage;
-            
-            // 根據新狀態提供預設訊息
-            if (!rawMessage) {
-                switch(newStatus) {
-                    case 'online_normal':
-                        finalMessage = '伺服器運行穩定，歡迎連線！';
-                        break;
-                    case 'online_lagging':
-                        finalMessage = '伺服器運行緩慢，請等待管理員處理。';
-                        break;
-                    case 'maintenance_planned':
-                        finalMessage = '正在進行排程維護，預計結束時間請參考下方訊息。';
-                        break;
-                    case 'maintenance_urgent':
-                        finalMessage = '緊急修復中，將在短時間內重啟。';
-                        break;
-                    case 'offline_graceful':
-                        finalMessage = '伺服器已由管理員正常關機。';
-                        break;
-                    case 'offline_crashed':
-                        finalMessage = '伺服器意外崩潰，正在檢查中。';
-                        break;
-                    case 'startup_check':
-                        finalMessage = '伺服器進程已啟動，正在載入世界數據。';
-                        break;
-                    case 'startup_complete':
-                        finalMessage = '伺服器啟動完成，管理員準備開放中。';
-                        break;
-                    default:
-                        finalMessage = '狀態已更新，無具體訊息。';
-                }
-            } else {
-                finalMessage = rawMessage;
-            }
+            const info = getStatusInfo(newStatus);
+            let finalMessage = rawMessage || info.defaultMsg;
 
             const updatedData = {
                 status: newStatus,
@@ -182,110 +252,7 @@
             };
 
             try {
-                // 寫入請求也發送到 mc-90f.pages.dev
-                const response = await fetch(STATUS_API_ENDPOINT, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(updatedData)
-                });
-
-                if (response.ok) {
-                    alert("✅ 狀態已成功更新至伺服器！");
-                    loadStatus();
-                    document.getElementById('admin-panel').style.display = 'none';
-                } else if (response.status === 401 || response.status === 403) {
-                    alert("❌ 權限錯誤：您沒有權限更新狀態。請通過 Zero Trust 登入您的管理員 Email。");
-                } else {
-                    alert(`❌ 更新失敗 (${response.status})。請檢查 Pages Function 日誌。`);
-                }
-
-            } catch (error) {
-                console.error('Update failed:', error);
-                alert("❌ 網路錯誤：無法連線到狀態 API。");
-            }
-        }
-
-        window.onload = loadStatus;
-    </script>
-
-</body>
-</html>
-            try {
-                const response = await fetch(STATUS_API_ENDPOINT); 
-                const statusData = await response.json(); 
-
-                const { status, message } = statusData;
-
-                displayArea.className = 'status-display'; 
-                displayArea.classList.add(status); 
-                
-                const statusText = getStatusText(status);
-                const finalMessage = message || '無最新訊息。';
-
-                displayArea.innerHTML = `${statusText} <br><small style="font-size: 0.5em; font-weight: normal;">${finalMessage}</small>`;
-
-                document.getElementById('new-status').value = status;
-                document.getElementById('new-message').value = message;
-
-            } catch (error) {
-                console.error('Failed to load status:', error);
-                // 讀取 API 失敗，設為 API 錯誤狀態
-                displayArea.className = 'status-display api_error';
-                displayArea.innerHTML = '💔 API 連線失敗 <br><small style="font-size: 0.5em; font-weight: normal;">無法連線到 Cloudflare API。</small>';
-            }
-        }
-
-        // --- 管理員操作 (Zero Trust) ---
-        function promptAdminLogin() {
-            document.getElementById('admin-panel').style.display = 'block';
-            alert("已進入管理模式。請注意：狀態更新的權限將由 Zero Trust 驗證。");
-        }
-
-        async function saveStatus() {
-            const newStatus = document.getElementById('new-status').value;
-            const rawMessage = document.getElementById('new-message').value.trim();
-            
-            let finalMessage;
-            
-            if (!rawMessage) {
-                switch(newStatus) {
-                    case 'online_normal':
-                        finalMessage = '伺服器運行穩定，歡迎連線！';
-                        break;
-                    case 'online_lagging':
-                        finalMessage = '伺服器運行緩慢，請等待管理員處理。';
-                        break;
-                    case 'maintenance_planned':
-                        finalMessage = '正在進行排程維護，預計結束時間請參考下方訊息。';
-                        break;
-                    case 'maintenance_urgent':
-                        finalMessage = '緊急修復中，將在短時間內重啟。';
-                        break;
-                    case 'offline_graceful':
-                        finalMessage = '伺服器已由管理員正常關機。';
-                        break;
-                    case 'offline_crashed':
-                        finalMessage = '伺服器意外崩潰，正在檢查中。';
-                        break;
-                    case 'startup_check':
-                        finalMessage = '伺服器進程已啟動，正在載入世界數據。';
-                        break;
-                    case 'startup_complete':
-                        finalMessage = '伺服器啟動完成，管理員準備開放中。';
-                        break;
-                    default:
-                        finalMessage = '狀態已更新，無具體訊息。';
-                }
-            } else {
-                finalMessage = rawMessage;
-            }
-
-            const updatedData = {
-                status: newStatus,
-                message: finalMessage
-            };
-
-            try {
+                // POST 請求：發送到 mc-90f.pages.dev，受 Zero Trust 保護
                 const response = await fetch(STATUS_API_ENDPOINT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
