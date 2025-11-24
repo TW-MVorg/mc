@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理員中心 - 狀態更新</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"> 
+    <style>
+        /* 繼承 index.html 的主要樣式，只新增管理面板 */
+        :root { /* ... 保持不變 ... */
+            --color-green: #28a745;
+            --color-red: #dc3545;
+            --color-blue: #007bff;
+            --color-black: #343a40;
+            --color-gray-light: #f8f9fa;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; color: var(--color-black); padding: 20px; text-align: center; }
+        .container { max-width: 600px; margin: 50px auto; background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15); text-align: left; }
+        h2 { color: var(--color-blue); margin-bottom: 25px; text-align: center; }
+        .admin-panel { padding: 25px; border: 1px solid #ccc; border-radius: 8px; background-color: var(--color-gray-light); }
+        .admin-button { padding: 10px 25px; font-size: 1em; cursor: pointer; background-color: var(--color-blue); color: white; border: none; border-radius: 5px; transition: background-color 0.3s; margin-top: 20px; width: 100%; }
+        .admin-button:hover { background-color: #0056b3; }
+        label { display: block; margin-top: 15px; font-weight: bold; color: var(--color-black); }
+        select, input[type="text"] { width: 100%; padding: 10px; margin-top: 8px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; }
+        #status-display { text-align: center; font-weight: bold; margin-bottom: 15px; color: var(--color-red); }
+        .status-info { text-align: center; font-size: 0.9em; color: #666; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2><i class="fas fa-lock"></i> 伺服器狀態管理</h2>
+
+        <div id="status-display">正在載入當前狀態...</div>
+
+        <div class="admin-panel">
+            <p class="status-info">您已成功通過 Zero Trust 驗證。請更新狀態：</p>
+            <label for="new-status">選擇新狀態：</label>
+            <select id="new-status">
+                <option value="online_normal">🟢 正常運行 (Stable)</option>
+                <option value="online_lagging">🟠 運行緩慢 (Lagging)</option>
+                <option value="maintenance_planned">🟡 排程維護中</option>
+                <option value="maintenance_urgent">🔴 緊急修復中</option>
+                <option value="offline_graceful">🔵 正常關閉 (Sleep)</option>
+                <option value="offline_crashed">⚫ 意外崩潰 (Crashed)</option>
+                <option value="startup_check">🟣 啟動中 (Checking)</option>
+                <option value="startup_complete">🟣 準備完畢 (Ready)</option>
+            </select>
+            
+            <label for="new-message">狀態訊息 (選填，對玩家顯示的詳細資訊):</label>
+            <input type="text" id="new-message" placeholder="輸入訊息...">
+
+            <button class="admin-button" onclick="saveStatus()">儲存並更新狀態</button>
+        </div>
+        <div class="status-info">更新後請點擊 <a href="index.html">返回前台</a> 確認狀態。</div>
+    </div>
+
+    <script>
+        // 讀取路徑和更新路徑必須分開
+        const STATUS_READ_ENDPOINT = '/status-public'; // 公開路徑
+        const STATUS_UPDATE_ENDPOINT = '/api/status'; // 受保護路徑 (POST)
+        
+        // --- 狀態轉換與圖標 ---
+        function getStatusInfo(status) {
+            // ... (同 index.html 的邏輯) ...
+            switch(status) {
+                case 'online_normal': return { text: '🟢 正常運行 (Stable)', icon: 'fas fa-check-circle', defaultMsg: '伺服器運行穩定，歡迎連線！' };
+                case 'online_lagging': return { text: '🟠 運行緩慢 (Lagging)', icon: 'fas fa-exclamation-triangle', defaultMsg: '伺服器運行緩慢，請等待管理員處理。' };
+                case 'maintenance_planned': return { text: '🟡 排程維護中', icon: 'fas fa-calendar-alt', defaultMsg: '正在進行排程維護，預計結束時間請參考下方訊息。' };
+                case 'maintenance_urgent': return { text: '🔴 緊急修復中', icon: 'fas fa-shield-alt', defaultMsg: '緊急修復中，將在短時間內重啟。' };
+                case 'offline_graceful': return { text: '🔵 正常關閉 (Sleep)', icon: 'fas fa-power-off', defaultMsg: '伺服器已由管理員正常關機。' };
+                case 'offline_crashed': return { text: '⚫ 意外崩潰 (Crashed)', icon: 'fas fa-bug', defaultMsg: '伺服器意外崩潰，正在檢查中。' };
+                case 'startup_check': return { text: '🟣 啟動中 (Checking)', icon: 'fas fa-cogs', defaultMsg: '伺服器進程已啟動，正在載入世界數據。' };
+                case 'startup_complete': return { text: '🟣 準備完畢 (Ready)', icon: 'fas fa-hourglass-end', defaultMsg: '伺服器啟動完成，管理員準備開放中。' };
+                default: return { text: '❓ 狀態未知', defaultMsg: 'Pages Function 發生未知錯誤或 KV 資料異常。' };
+            }
+        }
+
+        // 載入當前狀態到管理表單
+        async function loadCurrentStatus() {
+            const statusDisplay = document.getElementById('status-display');
+            try {
+                // 讀取請求：使用公開路徑
+                const response = await fetch(STATUS_READ_ENDPOINT); 
+                const statusData = await response.json(); 
+                const { status, message } = statusData;
+                const info = getStatusInfo(status);
+
+                statusDisplay.innerHTML = `當前狀態: <strong>${info.text}</strong>`;
+                document.getElementById('new-status').value = status;
+                document.getElementById('new-message').value = message;
+            } catch (error) {
+                statusDisplay.textContent = '無法讀取當前狀態，請手動選擇。';
+            }
+        }
+
+        // 儲存狀態 (POST 請求)
+        async function saveStatus() {
+            const newStatus = document.getElementById('new-status').value;
+            const rawMessage = document.getElementById('new-message').value.trim();
+            
+            const info = getStatusInfo(newStatus);
+            let finalMessage = rawMessage || info.defaultMsg;
+
+            const updatedData = { status: newStatus, message: finalMessage };
+
+            try {
+                // POST 請求：發送到受保護路徑
+                const response = await fetch(STATUS_UPDATE_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updatedData)
+                });
+
+                if (response.ok) {
+                    alert("✅ 狀態已成功更新至伺服器！");
+                    loadCurrentStatus(); // 更新後重新載入顯示
+                } else if (response.status === 401 || response.status === 403) {
+                    alert("❌ 權限錯誤：您沒有權限更新狀態。請確認已通過 Zero Trust 驗證。");
+                } else {
+                    alert(`❌ 更新失敗 (${response.status})。請檢查 Pages Function 日誌。`);
+                }
+
+            } catch (error) {
+                alert("❌ 網路錯誤：無法連線到狀態 API。");
+            }
+        }
+
+        window.onload = loadCurrentStatus;
+    </script>
+
+</body>
+</html>
