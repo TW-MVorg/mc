@@ -162,8 +162,8 @@
     </div>
 
     <script>
-        // *** 關鍵設置：硬性指向您的 Cloudflare Pages API 域名 ***
-        const STATUS_API_ENDPOINT = 'https://mc-90f.pages.dev/api/status'; 
+        // *** 修正點：使用相對路徑，確保呼叫當前 Pages Functions ***
+        const STATUS_API_ENDPOINT = '/api/status'; 
         
         // --- 狀態轉換與圖標 ---
         function getStatusInfo(status) {
@@ -206,10 +206,15 @@
             msgArea.textContent = '正在連線到 Cloudflare API 獲取狀態';
             
             try {
-                // GET 請求：從 mc-90f.pages.dev 讀取狀態
+                // GET 請求
                 const response = await fetch(STATUS_API_ENDPOINT); 
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP 錯誤狀態碼: ${response.status}`);
+                }
+                
                 const statusData = await response.json(); 
-
+                
                 const { status, message } = statusData;
                 const info = getStatusInfo(status);
 
@@ -252,7 +257,7 @@
             };
 
             try {
-                // POST 請求：發送到 mc-90f.pages.dev，受 Zero Trust 保護
+                // POST 請求：發送到 Pages Functions，受 Zero Trust 保護
                 const response = await fetch(STATUS_API_ENDPOINT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
