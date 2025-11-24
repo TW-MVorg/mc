@@ -44,8 +44,8 @@ export const onRequest = async ({ request, env }) => {
                 if (statusJson) {
                     statusData = JSON.parse(statusJson);
                 } else {
-                    // 如果 KV 裡還沒有數據，返回預設狀態
-                    statusData = { status: 'maintenance', message: '頁面已載入，請管理員更新。' };
+                    // 預設狀態為 'unknown'
+                    statusData = { status: 'unknown', message: '頁面已載入，請管理員更新。' };
                 }
                 
                 return new Response(JSON.stringify(statusData), {
@@ -59,6 +59,6 @@ export const onRequest = async ({ request, env }) => {
         }
     }
     
-    // 如果不是 /api/status 請求，繼續處理 Pages 靜態檔案（例如 index.html）
+    // 如果不是 /api/status 請求，繼續處理 Pages 靜態檔案
     return env.ASSETS.fetch(request);
 };
