@@ -5,20 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MC 伺服器狀態管理頁面</title>
     <style>
-        /* CSS 樣式與您提供的完全相同 */
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; color: #333; text-align: center; padding-top: 50px; }
         .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
         h1 { color: #007bff; margin-bottom: 20px; }
         .status-display { padding: 20px; border-radius: 8px; font-size: 1.8em; font-weight: bold; margin-bottom: 30px; }
-        .online { background-color: #d4edda; color: #155724; }
-        .maintenance { background-color: #fff3cd; color: #856404; }
-        .offline { background-color: #f8d7da; color: #721c24; }
+        
+        /* 十種新狀態的顏色定義 */
+        .online_normal { background-color: #d4edda; color: #155724; } 
+        .online_lagging { background-color: #fff3cd; color: #856404; } 
+        .maintenance_planned { background-color: #ffe599; color: #9c6c00; } 
+        .maintenance_urgent { background-color: #f8d7da; color: #721c24; } /* 警告紅 */
+        .offline_graceful { background-color: #cce0ff; color: #004085; } /* 藍色 */
+        .offline_crashed { background-color: #343a40; color: #ffffff; } 
+        .startup_check { background-color: #ccacec; color: #4b0082; } /* 淺紫色 */
+        .startup_complete { background-color: #9933cc; color: #ffffff; } /* 深紫色 */
+        .api_error { background-color: #888; color: #ffffff; } /* 深灰色 */
+        .unknown { background-color: #e9e9e9; color: #6c757d; } /* 淺灰色 */
+
         .address { font-size: 1.2em; margin-bottom: 20px; }
         .admin-button { padding: 10px 20px; font-size: 1em; cursor: pointer; background-color: #6c757d; color: white; border: none; border-radius: 5px; }
         #admin-panel { margin-top: 30px; padding: 20px; border: 1px solid #ccc; border-radius: 5px; display: none; text-align: left; }
         #admin-panel label { display: block; margin-top: 10px; font-weight: bold; }
         #admin-panel select, #admin-panel input[type="text"] { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        #admin-panel button { margin-top: 15px; background-color: #28a745; }
+        #admin-panel button { margin-top: 15px; background-color: #007bff; }
     </style>
 </head>
 <body>
@@ -30,7 +39,7 @@
             伺服器地址：<strong>mc.mqi.qzz.io:19132</strong>
         </div>
 
-        <div id="status-display-area" class="status-display maintenance">
+        <div id="status-display-area" class="status-display unknown">
             載入中...
         </div>
 
@@ -40,25 +49,56 @@
             <h2>更新伺服器狀態</h2>
             <label for="new-status">選擇新狀態：</label>
             <select id="new-status">
-                <option value="online">🟢 伺服器在線</option>
-                <option value="maintenance">🟡 維護中</option>
-                <option value="offline">🔴 伺服器離線</option>
-            </select>
+                <option value="online_normal">🟢 正常運行 (Stable)</option>
+                <option value="online_lagging">🟠 運行緩慢 (Lagging)</option>
+                <option value="maintenance_planned">🟡 排程維護中</option>
+                <option value="maintenance_urgent">🔴 緊急修復中</option>
+                <option value="offline_graceful">🔵 正常關閉 (Sleep)</option>
+                <option value="offline_crashed">⚫ 意外崩潰 (Crashed)</option>
+                <option value="startup_check">🟣 啟動中 (Checking)</option>
+                <option value="startup_complete">🟣 準備完畢 (Ready)</option>
+                </select>
             
-            <label for="new-message">狀態訊息 (選填，例如：預計 18:00 開機):</label>
+            <label for="new-message">狀態訊息 (選填):</label>
             <input type="text" id="new-message" placeholder="輸入訊息...">
 
-            <button class="admin-button" onclick="saveStatus()" style="background-color: #007bff;">儲存並更新狀態</button>
+            <button class="admin-button" onclick="saveStatus()">儲存並更新狀態</button>
         </div>
     </div>
 
     <script>
         const STATUS_API_ENDPOINT = '/api/status';
         
+        function getStatusText(status) {
+            switch(status) {
+                case 'online_normal':
+                    return '🟢 正常運行 (Stable)';
+                case 'online_lagging':
+                    return '🟠 運行緩慢 (Lagging)';
+                case 'maintenance_planned':
+                    return '🟡 排程維護中';
+                case 'maintenance_urgent':
+                    return '🔴 緊急修復中';
+                case 'offline_graceful':
+                    return '🔵 正常關閉 (Sleep)';
+                case 'offline_crashed':
+                    return '⚫ 意外崩潰 (Crashed)';
+                case 'startup_check':
+                    return '🟣 啟動中 (Checking)';
+                case 'startup_complete':
+                    return '🟣 準備完畢 (Ready)';
+                case 'api_error':
+                    return '💔 API 連線失敗';
+                case 'unknown':
+                default:
+                    return '❓ 狀態未知 (Unknown)';
+            }
+        }
+
         // --- 載入和顯示狀態 (從 KV 讀取) ---
         async function loadStatus() {
             const displayArea = document.getElementById('status-display-area');
-            displayArea.className = 'status-display maintenance';
+            displayArea.className = 'status-display unknown';
             displayArea.innerHTML = '正在從伺服器載入...';
             
             try {
@@ -68,17 +108,9 @@
                 const { status, message } = statusData;
 
                 displayArea.className = 'status-display'; 
-                displayArea.classList.add(status);
+                displayArea.classList.add(status); 
                 
-                let statusText = '';
-                if (status === 'online') {
-                    statusText = '🟢 伺服器在線';
-                } else if (status === 'maintenance') {
-                    statusText = '🟡 維護中';
-                } else if (status === 'offline') {
-                    statusText = '🔴 伺服器離線';
-                }
-
+                const statusText = getStatusText(status);
                 const finalMessage = message || '無最新訊息。';
 
                 displayArea.innerHTML = `${statusText} <br><small style="font-size: 0.5em; font-weight: normal;">${finalMessage}</small>`;
@@ -88,8 +120,9 @@
 
             } catch (error) {
                 console.error('Failed to load status:', error);
-                displayArea.className = 'status-display offline';
-                displayArea.innerHTML = '🔴 錯誤 <br><small style="font-size: 0.5em; font-weight: normal;">無法連線到狀態 API，請檢查部署。</small>';
+                // 讀取 API 失敗，設為 API 錯誤狀態
+                displayArea.className = 'status-display api_error';
+                displayArea.innerHTML = '💔 API 連線失敗 <br><small style="font-size: 0.5em; font-weight: normal;">無法連線到 Cloudflare API。</small>';
             }
         }
 
@@ -104,20 +137,39 @@
             const rawMessage = document.getElementById('new-message').value.trim();
             
             let finalMessage;
-             if (!rawMessage) {
-                if (newStatus === 'online') {
-                    finalMessage = '歡迎連線！伺服器運行穩定。';
-                } else if (newStatus === 'offline') {
-                    finalMessage = '伺服器目前已關機或無法連線。';
-                } else if (newStatus === 'maintenance') {
-                    finalMessage = '伺服器正在進行臨時維護，很快會回來。';
-                } else {
-                    finalMessage = '狀態已更新，但無具體訊息。';
+            
+            if (!rawMessage) {
+                switch(newStatus) {
+                    case 'online_normal':
+                        finalMessage = '伺服器運行穩定，歡迎連線！';
+                        break;
+                    case 'online_lagging':
+                        finalMessage = '伺服器運行緩慢，請等待管理員處理。';
+                        break;
+                    case 'maintenance_planned':
+                        finalMessage = '正在進行排程維護，預計結束時間請參考下方訊息。';
+                        break;
+                    case 'maintenance_urgent':
+                        finalMessage = '緊急修復中，將在短時間內重啟。';
+                        break;
+                    case 'offline_graceful':
+                        finalMessage = '伺服器已由管理員正常關機。';
+                        break;
+                    case 'offline_crashed':
+                        finalMessage = '伺服器意外崩潰，正在檢查中。';
+                        break;
+                    case 'startup_check':
+                        finalMessage = '伺服器進程已啟動，正在載入世界數據。';
+                        break;
+                    case 'startup_complete':
+                        finalMessage = '伺服器啟動完成，管理員準備開放中。';
+                        break;
+                    default:
+                        finalMessage = '狀態已更新，無具體訊息。';
                 }
             } else {
                 finalMessage = rawMessage;
             }
-
 
             const updatedData = {
                 status: newStatus,
